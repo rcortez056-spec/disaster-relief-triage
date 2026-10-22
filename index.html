@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disaster Relief Triage & Dispatch — Ramon Cortez, AI Architect</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #070a14; color: #e6edf7; min-height: 100vh; padding: 1.25rem;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; }
+  .card { background: #0e1526; border: 1px solid #1e294b; border-radius: 12px; padding: 1.25rem; }
+  .label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #8b9bb4; }
+  .muted { color: #8b9bb4; font-size: 0.85rem; }
+  .dim { color: #64748b; }
+
+  /* header */
+  header {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+    background: #0e1526; border: 1px solid #1e294b; border-radius: 12px; padding: 1rem 1.5rem;
+  }
+  h1 { font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.6rem; }
+  .credit { color: #64748b; font-size: 0.8rem; margin-top: 0.25rem; }
+  .status-badge {
+    display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    padding: 0.35rem 0.8rem; border-radius: 999px; border: 1px solid;
+    color: #fbbf24; border-color: #b45309; background: rgba(217, 119, 6, 0.1);
+  }
+  .status-badge.live { color: #10b981; border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
+  .pulse-dot { width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; }
+  .status-badge.live .pulse-dot { background: #10b981; animation: livePulse 1.6s infinite; }
+
+  .banner {
+    background: rgba(120, 53, 15, 0.25); border: 1px solid rgba(180, 83, 9, 0.5);
+    border-radius: 10px; padding: 0.7rem 1rem; font-size: 0.8rem; color: #fcd34d;
+  }
+
+  /* input */
+  .input-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem; }
+  input[type="text"] {
+    flex: 1; min-width: 240px; background: #070a14; border: 1px solid #1e294b; border-radius: 10px;
+    padding: 0.8rem 1rem; font-size: 0.9rem; color: #e6edf7; font-family: inherit; outline: none;
+  }
+  input[type="text"]:focus { border-color: #d97706; }
+  input[type="text"]:disabled { opacity: 0.6; }
+  .btn {
+    border: none; border-radius: 10px; padding: 0.8rem 1.5rem; font-size: 0.9rem; font-weight: 600;
+    font-family: inherit; color: #fff; background: #d97706; cursor: pointer;
+  }
+  .btn:hover { background: #b45309; }
+  .btn:disabled { opacity: 0.6; cursor: wait; }
+  .presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; align-items: center; font-size: 0.8rem; }
+  .chip {
+    background: #1e294b; color: #cbd5e1; border: 1px solid #334155; border-radius: 8px;
+    padding: 0.35rem 0.75rem; font-size: 0.78rem; font-family: inherit; cursor: pointer;
+  }
+  .chip:hover { background: #334155; }
+  .hint { font-size: 0.72rem; color: #64748b; margin-top: 0.7rem; min-height: 1em; }
+
+  /* ticker */
+  .ticker {
+    background: #0e1526; border: 1px solid #1e294b; border-radius: 8px;
+    padding: 0.6rem 1rem; font-size: 0.82rem; color: #94a3b8;
+    display: flex; align-items: center; gap: 1rem; overflow: hidden; white-space: nowrap;
+  }
+  .ticker-tag { background: #3b82f6; color: #fff; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+  #tickerText { overflow: hidden; text-overflow: ellipsis; }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .stat { text-align: center; position: relative; overflow: hidden; }
+  .stat::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #3b82f6; }
+  .stat.c-crit::after { background: #ef4444; }
+  .stat.c-route::after { background: #10b981; }
+  .stat.c-rev::after { background: #a855f7; }
+  .stat-num { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 0.72rem; color: #8b9bb4; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 0.2rem; }
+
+  /* filters */
+  .filters { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+  .filter-group { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .filter {
+    background: #1e294b; color: #cbd5e1; border: 1px solid #334155; border-radius: 10px;
+    padding: 0.45rem 0.9rem; font-size: 0.78rem; font-weight: 600; font-family: inherit; cursor: pointer;
+  }
+  .filter.on { background: #d97706; color: #fff; border-color: #d97706; }
+
+  /* main */
+  .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; }
+  .panel { display: flex; flex-direction: column; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; gap: 0.5rem; }
+  .badge { font-size: 0.72rem; color: #64748b; background: #070a14; border: 1px solid #1e294b; border-radius: 8px; padding: 0.25rem 0.6rem; }
+  .feed { height: 440px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.2rem; }
+
+  .req {
+    border: 1px solid #1e294b; border-left: 4px solid #3b4a6b; border-radius: 8px;
+    padding: 0.75rem 0.9rem; font-size: 0.85rem; background: #070a14;
+    animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .req.critical { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.04); }
+  .req.high { border-left-color: #f59e0b; }
+  .req.routine { border-left-color: #10b981; }
+  .req.review { border-left-color: #a855f7; }
+  .req-top { display: flex; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; align-items: center; }
+  .req-loc { font-weight: 600; color: #f1f5f9; }
+  .req-msg { color: #cbd5e1; font-style: italic; margin-bottom: 0.3rem; }
+  .req-meta { font-size: 0.73rem; color: #64748b; display: flex; justify-content: space-between; gap: 0.5rem; }
+  .tag { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; text-transform: uppercase; }
+  .tag.critical { background: rgba(239,68,68,0.2); color: #ef4444; }
+  .tag.high { background: rgba(245,158,11,0.2); color: #f59e0b; }
+  .tag.routine { background: rgba(16,185,129,0.2); color: #10b981; }
+  .tag.review { background: rgba(168,85,247,0.2); color: #a855f7; }
+
+  .map {
+    position: relative; height: 440px; border-radius: 8px; overflow: hidden; border: 1px solid #1e294b;
+    background: radial-gradient(circle at 40% 40%, #111c38 0%, #070a14 80%);
+  }
+  .zone { position: absolute; font-size: 0.7rem; color: #475569; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; pointer-events: none; }
+  .dot {
+    position: absolute; width: 12px; height: 12px; border-radius: 50%;
+    transform: translate(-50%, -50%); transition: all 0.5s ease; box-shadow: 0 0 10px currentColor;
+  }
+  .dot::before {
+    content: ''; position: absolute; top: -6px; left: -6px; right: -6px; bottom: -6px;
+    border-radius: 50%; border: 2px solid currentColor; animation: radarPing 2s infinite; opacity: 0;
+  }
+  .dot.critical { background: #ef4444; color: #ef4444; }
+  .dot.critical::before { opacity: 0.8; }
+  .dot.high { background: #f59e0b; color: #f59e0b; }
+  .dot.routine { background: #10b981; color: #10b981; }
+  .dot.review { background: #a855f7; color: #a855f7; }
+
+  .teams { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; }
+  .team { text-align: center; padding: 0.8rem; }
+  .team b { display: block; font-size: 0.9rem; margin-bottom: 0.2rem; color: #f1f5f9; }
+  .team span { font-size: 0.75rem; color: #8b9bb4; font-variant-numeric: tabular-nums; }
+
+  footer { text-align: center; color: #475569; font-size: 0.78rem; margin-top: 0.25rem; }
+
+  @keyframes livePulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16,185,129,0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16,185,129,0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+  }
+  @keyframes radarPing { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(2.8); opacity: 0; } }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .stats, .teams { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1><span class="pulse-dot" style="display:inline-block"></span> Disaster Relief Triage &amp; Dispatch</h1>
+      <div class="muted">Aid requests in, urgency scored, routed to the right team in seconds.</div>
+      <div class="credit">Built by Ramon Cortez, AI Architect</div>
+    </div>
+    <div id="statusBadge" class="status-badge">
+      <span class="pulse-dot"></span>
+      <span id="statusText">Local classifier (no AI key)</span>
+    </div>
+  </header>
+
+  <div class="banner"><strong>Simulated data.</strong> All requests, names, and locations are mock examples for demonstration. No real incidents.</div>
+
+  <div class="card">
+    <div class="label">Submit a dispatch request</div>
+    <div class="input-row">
+      <input type="text" id="customInput" maxlength="300"
+        placeholder="e.g. Elderly diabetic person trapped on 2nd floor, water rising fast near North District...">
+      <button id="submitBtn" class="btn">Dispatch</button>
+    </div>
+    <div class="presets">
+      <span class="dim" style="font-weight:500">Presets:</span>
+      <button class="chip preset" data-text="Severe chest pain and difficulty breathing on 4th avenue">Medical Emergency</button>
+      <button class="chip preset" data-text="Main water pipe burst flooding lower level apartments">Infrastructure Break</button>
+      <button class="chip preset" data-text="Need blankets and warm shelter for 15 displaced children">Shelter Request</button>
+    </div>
+    <p id="inputNote" class="hint"></p>
+  </div>
+
+  <div class="ticker">
+    <span class="ticker-tag">Live stream</span>
+    <span id="tickerText">Waiting for incoming requests...</span>
+  </div>
+
+  <div class="stats">
+    <div class="card stat"><div class="stat-num" id="sTotal">0</div><div class="stat-label">Total processed</div></div>
+    <div class="card stat c-crit"><div class="stat-num" id="sCritical" style="color:#ef4444">0</div><div class="stat-label">Critical priority</div></div>
+    <div class="card stat c-route"><div class="stat-num" id="sRouted" style="color:#10b981">0</div><div class="stat-label">Auto-routed</div></div>
+    <div class="card stat c-rev"><div class="stat-num" id="sReview" style="color:#a855f7">0</div><div class="stat-label">Human review</div></div>
+  </div>
+
+  <div class="card filters">
+    <span class="label">Filter by urgency</span>
+    <div class="filter-group">
+      <button class="filter on" data-filter="all">All</button>
+      <button class="filter" data-filter="critical">Critical</button>
+      <button class="filter" data-filter="high">High</button>
+      <button class="filter" data-filter="routine">Routine</button>
+      <button class="filter" data-filter="review">Review</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card panel">
+      <div class="panel-head">
+        <span class="label">Autonomous ingest feed</span>
+        <span id="activeFilterBadge" class="badge">Showing: ALL</span>
+      </div>
+      <div class="feed" id="feed"></div>
+    </div>
+
+    <div class="card panel">
+      <div class="panel-head">
+        <span class="label">Tactical radar map</span>
+        <span class="badge">Simulated sectors</span>
+      </div>
+      <div class="map" id="map">
+        <span class="zone" style="left:10%;top:12%">North District</span>
+        <span class="zone" style="left:58%;top:15%">Riverside</span>
+        <span class="zone" style="left:15%;top:72%">Harbor Sector</span>
+        <span class="zone" style="left:62%;top:75%">Eastfield Zone</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="teams">
+    <div class="card team"><b>Medical response</b><span id="tMed">0 routed</span></div>
+    <div class="card team"><b>Water &amp; supplies</b><span id="tWater">0 routed</span></div>
+    <div class="card team"><b>Shelter operations</b><span id="tShelter">0 routed</span></div>
+    <div class="card team"><b>Power &amp; infra</b><span id="tPower">0 routed</span></div>
+  </div>
+
+  <footer>Simulated disaster response demo &middot; Ramon Cortez, AI Architect</footer>
+</div>
+
+<script>
+  // Leave empty to use the local keyword classifier (no key, works offline).
+  // Set to your backend URL (a serverless function that holds the Gemini key).
+  // Expected: POST { text } -> JSON { loc, need, urgency, x, y }
+  const TRIAGE_ENDPOINT = "";
+
+  const LOCATIONS = ["North District", "Riverside", "Harbor Sector", "Eastfield Zone"];
+  const NEEDS = ["medical", "water", "shelter", "power", "unclear"];
+  const URGENCIES = ["critical", "high", "routine", "review"];
+  const TEAM_IDS = { medical: "tMed", water: "tWater", shelter: "tShelter", power: "tPower" };
+  const TEAM_NAMES = { medical: "Medical Response", water: "Water & Supplies", shelter: "Shelter Operations", power: "Power & Infrastructure" };
+  const URG_LABEL = { critical: "CRITICAL", high: "HIGH", routine: "ROUTINE", review: "HUMAN REVIEW" };
+
+  const SEEDS = [
+    { loc: "North District", msg: "Infant insulin depleted, floodwaters reaching second step", need: "medical", urgency: "critical", x: 22, y: 24 },
+    { loc: "Riverside", msg: "Emergency drinking water needed for 8 stranded residents", need: "water", urgency: "high", x: 64, y: 28 },
+    { loc: "Harbor Sector", msg: "Ventilator battery failing, power transformer blown", need: "power", urgency: "critical", x: 28, y: 62 },
+    { loc: "Eastfield Zone", msg: "Displaced family seeking shelter tonight", need: "shelter", urgency: "high", x: 68, y: 70 },
+    { loc: "Riverside", msg: "any supplies dropped yet?", need: "unclear", urgency: "review", x: 52, y: 40 },
+    { loc: "North District", msg: "Dry blankets delivered to community center gym", need: "shelter", urgency: "routine", x: 34, y: 32 },
+    { loc: "Harbor Sector", msg: "Severe laceration on leg, bleeding controlled, needs a nurse", need: "medical", urgency: "high", x: 18, y: 80 },
+    { loc: "Eastfield Zone", msg: "Cell towers offline, emergency comms requested", need: "power", urgency: "routine", x: 74, y: 55 },
+    { loc: "Riverside", msg: "Type-1 diabetic neighbor unresponsive, pharmacy locked", need: "medical", urgency: "critical", x: 58, y: 32 },
+    { loc: "North District", msg: "Bottled water pallet received at checkpoint alpha", need: "water", urgency: "routine", x: 28, y: 20 }
+  ];
+
+  let requests = [];
+  let currentFilter = "all";
+  let streamIndex = 0;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function clamp(n, lo, hi, fallback) {
+    const v = Number(n);
+    return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback;
+  }
+  function nowTime() {
+    return new Date().toTimeString().split(" ")[0];
+  }
+
+  function normalize(raw, msg) {
+    return {
+      loc: LOCATIONS.includes(raw.loc) ? raw.loc : "North District",
+      msg: msg,
+      need: NEEDS.includes(raw.need) ? raw.need : "unclear",
+      urgency: URGENCIES.includes(raw.urgency) ? raw.urgency : "review",
+      x: clamp(raw.x, 15, 85, 50),
+      y: clamp(raw.y, 15, 85, 50),
+      time: nowTime()
+    };
+  }
+
+  function localClassify(text) {
+    const t = text.toLowerCase();
+    let need = "unclear", urgency = "high";
+    if (/insulin|oxygen|breath|chest|heart|bleed|trapped|diabetic|medication|nurse|medical/.test(t)) need = "medical";
+    else if (/water|pipe|flood/.test(t)) need = "water";
+    else if (/shelter|blanket|displaced|warm|children/.test(t)) need = "shelter";
+    else if (/power|electric|battery|charge|line down/.test(t)) need = "power";
+
+    if (/trapped|not breathing|severe|chest pain|bleeding|oxygen|insulin|rising fast/.test(t)) urgency = "critical";
+    else if (text.trim().length < 15 || need === "unclear") urgency = "review";
+    else if (/routine|delivered|donat/.test(t)) urgency = "routine";
+
+    let loc = "North District";
+    if (/riverside|river/.test(t)) loc = "Riverside";
+    else if (/harbor|harbour|dock/.test(t)) loc = "Harbor Sector";
+    else if (/eastfield|east/.test(t)) loc = "Eastfield Zone";
+
+    return normalize({ loc, need, urgency, x: 15 + Math.random() * 70, y: 15 + Math.random() * 70 }, text);
+  }
+
+  async function classify(text) {
+    if (!TRIAGE_ENDPOINT) return { result: localClassify(text), mode: "local" };
+    try {
+      const res = await fetch(TRIAGE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return { result: normalize(await res.json(), text), mode: "ai" };
+    } catch (err) {
+      return { result: localClassify(text), mode: "local-fallback" };
+    }
+  }
+
+  function setStatus(live) {
+    const badge = document.getElementById("statusBadge");
+    badge.className = "status-badge" + (live ? " live" : "");
+    document.getElementById("statusText").textContent = live ? "AI classifier connected" : "Local classifier (no AI key)";
+    document.getElementById("inputNote").textContent = live
+      ? "Requests are classified by the AI backend."
+      : "Requests are classified by local keyword rules. Connect a backend endpoint to use AI.";
+  }
+
+  function render() {
+    const feed = document.getElementById("feed");
+    const map = document.getElementById("map");
+    feed.innerHTML = "";
+    map.querySelectorAll(".dot").forEach(d => d.remove());
+
+    const counts = { total: requests.length, critical: 0, routed: 0, review: 0 };
+    const teams = { medical: 0, water: 0, shelter: 0, power: 0 };
+    requests.forEach(r => {
+      if (r.urgency === "critical") counts.critical++;
+      if (r.urgency === "review") counts.review++;
+      else { counts.routed++; if (teams[r.need] !== undefined) teams[r.need]++; }
+    });
+
+    requests.forEach(r => {
+      if (currentFilter !== "all" && r.urgency !== currentFilter) return;
+
+      const card = document.createElement("div");
+      card.className = "req " + r.urgency;
+      card.innerHTML =
+        '<div class="req-top"><span class="req-loc">' + esc(r.loc) + '</span>' +
+        '<span class="tag ' + r.urgency + '">' + URG_LABEL[r.urgency] + '</span></div>' +
+        '<div class="req-msg">"' + esc(r.msg) + '"</div>' +
+        '<div class="req-meta"><span>' +
+          (r.urgency === "review" ? "Low confidence, queued for human review" : "Auto-routed to " + TEAM_NAMES[r.need]) +
+        '</span><span>' + r.time + '</span></div>';
+      feed.appendChild(card);
+
+      const dot = document.createElement("div");
+      dot.className = "dot " + r.urgency;
+      dot.style.left = r.x + "%";
+      dot.style.top = r.y + "%";
+      dot.title = r.loc + ": " + r.msg;
+      map.appendChild(dot);
+    });
+
+    document.getElementById("sTotal").textContent = counts.total;
+    document.getElementById("sCritical").textContent = counts.critical;
+    document.getElementById("sRouted").textContent = counts.routed;
+    document.getElementById("sReview").textContent = counts.review;
+    Object.keys(TEAM_IDS).forEach(k => {
+      document.getElementById(TEAM_IDS[k]).textContent = teams[k] + " routed";
+    });
+
+    const latest = requests[0];
+    if (latest) {
+      document.getElementById("tickerText").textContent =
+        "[" + latest.time + "] " + latest.loc.toUpperCase() + " (" + URG_LABEL[latest.urgency] + ") " +
+        (latest.urgency === "review" ? "-> human review" : "-> " + TEAM_NAMES[latest.need]);
+    }
+  }
+
+  function add(r) {
+    requests.unshift(r);
+    if (requests.length > 60) requests.pop();
+    render();
+  }
+
+  function setFilter(f) {
+    currentFilter = f;
+    document.querySelectorAll(".filter").forEach(b => b.classList.toggle("on", b.dataset.filter === f));
+    document.getElementById("activeFilterBadge").textContent = "Showing: " + f.toUpperCase();
+    render();
+  }
+
+  async function submit() {
+    const input = document.getElementById("customInput");
+    const btn = document.getElementById("submitBtn");
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.disabled = true;
+    btn.disabled = true;
+    btn.textContent = "Classifying...";
+
+    const { result, mode } = await classify(text);
+    setStatus(mode === "ai");
+    add(result);
+
+    input.value = "";
+    input.disabled = false;
+    btn.disabled = false;
+    btn.textContent = "Dispatch";
+    input.focus();
+  }
+
+  function streamNext() {
+    const seed = SEEDS[streamIndex % SEEDS.length];
+    streamIndex++;
+    add(Object.assign({}, seed, { time: nowTime() }));
+    setTimeout(streamNext, 2500);
+  }
+
+  document.getElementById("submitBtn").addEventListener("click", submit);
+  document.getElementById("customInput").addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+  document.querySelectorAll(".preset").forEach(b => b.addEventListener("click", () => {
+    const input = document.getElementById("customInput");
+    input.value = b.dataset.text;
+    input.focus();
+  }));
+  document.querySelectorAll(".filter").forEach(b => b.addEventListener("click", () => setFilter(b.dataset.filter)));
+
+  setStatus(!!TRIAGE_ENDPOINT);
+  SEEDS.slice(0, 3).reverse().forEach(s => requests.unshift(Object.assign({}, s, { time: nowTime() })));
+  streamIndex = 3;
+  render();
+  setTimeout(streamNext, 2500);
+</script>
+</body>
+</html>
